@@ -4,7 +4,7 @@
 
 Server and client for BuntDB using simple text protocol over TCP. 
 
-BuntDB is awesome simple key/value storage written on Go. 
+[BuntDB] is awesome simple key/value storage written on Go. 
 It can be used locally, but there is not out-of-box way to use remote database connection.
 ProtoBunt trying to be a solution.
 
@@ -12,6 +12,7 @@ ProtoBunt trying to be a solution.
 ```sh
 $ go get -u github.com/biobdeveloper/protobunt
 ```
+
 ## Usage
 
 ### Start BundDb Server
@@ -73,3 +74,5 @@ Client sending requests with text data
 * `View\tGet\t{Alice}\n`
 * `Update\tSet\t{Alice:Bob}\n`
 * ...
+
+[BuntDB]: https://github.com/tidwall/buntdb
