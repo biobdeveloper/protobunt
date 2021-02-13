@@ -1,4 +1,7 @@
 # ProtoBunt
+
+![Go](https://github.com/biobdeveloper/protobunt/workflows/Go/badge.svg)
+
 Server and client for BuntDB using simple text protocol over TCP. 
 
 BuntDB is awesome simple key/value storage written on Go. 
@@ -49,7 +52,7 @@ func main()  {
 	cli.Update(SET, "Alice", "Bob")
 
 	// And look at this
-	get := cli.View(GET, "x")
+	get := cli.View(GET, "Alice")
 	fmt.Printf("Alice loves %s", get)
          // Alice loves Bob
 }
