@@ -1,17 +1,13 @@
 package protobunt
 
 import (
-	"bufio"
-	"errors"
+	"context"
 	"github.com/tidwall/buntdb"
 	"log"
 	"net"
-	"strings"
-)
 
-
-var (
-	BadRequest = errors.New("bad request")
+	"google.golang.org/grpc"
+	pb "protobunt/proto"
 )
 
 type BuntServer struct {
@@ -19,111 +15,74 @@ type BuntServer struct {
 	protobuntVersion string
 }
 
-type Action func(fn func(tx *buntdb.Tx) error) error
-
-func (buntServer *BuntServer) processRequest(raw string) string{
-	var response string
-	raw = strings.Trim(raw, "\n")
-
-	reqData := strings.Split(raw, "\t")
-
-	if len(reqData) < 2 {
-		log.Print("Unable to decode request")
-		return BadRequest.Error()
-	}
-
-	actionName := reqData[0]
-
-	var action Action
-
-	switch actionName {
-
-	case "Test":
-		return buntServer.protobuntVersion
-
-	case "View":
-		action = buntServer.db.View
-
-	case "Update":
-		action =  buntServer.db.Update
-	}
-
-	txName := reqData[1]
-
-	var key, value string
-	contextData := strings.Trim(reqData[2], "{}")
-
-	if strings.Contains(contextData, ":") {
-		context := strings.Split(contextData, ":")
-		key = context[0]
-		value = context[1]
-	} else {
-		key = contextData
-		value = ""
-	}
-
-	_ = action(func(tx *buntdb.Tx) error {
-		if actionName == "View" {
-			if txName == "Get" {
-				val, _ := tx.Get(key)
-				response = val
-			}
+type server struct {
+	pb.UnimplementedProtoBuntServer
+	buntServer BuntServer
+}
 
 
-		}
-		if actionName == "Update" {
-			if txName == "Set" {
-				val, _, _ := tx.Set(key, value, nil)
-				response = val
-			}
-			if txName == "Delete" {
-				val, _:= tx.Delete(key)
-				response = val
+func (s *server) VersionCheck(ctx context.Context, in *pb.TestRequest) (*pb.TestResponse, error) {
+	return &pb.TestResponse{ServerVersion: VERSION}, nil
+}
+
+
+func (s *server) View(ctx context.Context, in *pb.ViewRequest) (*pb.ViewResponse, error) {
+	response := new(pb.ViewResponse)
+	_ = s.buntServer.db.View(func(tx *buntdb.Tx) error {
+		if in.Action == GET{
+			val, err := tx.Get(in.GetKey())
+			response.Val = val
+			if err != nil {
+				response.Error = err.Error()
 			}
 		}
 		return nil
 	})
-
-	return response + "\n"
-
+	return response, nil
 }
 
-func (buntServer *BuntServer) handleConnection(c net.Conn) {
-	for {
-		netData, err := bufio.NewReader(c).ReadString('\n')
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		if err != nil {
-			log.Fatal(err)
-		}
 
-		result := buntServer.processRequest(netData)
-
-		c.Write([]byte(result + "\n"))
-	}
-	c.Close()
+func (s *server) Update(ctx context.Context, in *pb.UpdateRequest) (*pb.UpdateResponse, error) {
+	response := new(pb.UpdateResponse)
+	_  = s.buntServer.db.Update(func(tx *buntdb.Tx) error {
+		if in.Action == SET {
+			prev, repl, err := tx.Set(in.GetKey(), in.GetValue(), nil)
+			response.PreviousValue = prev
+			response.Replaced = repl
+			if err != nil {
+				response.Error = err.Error()
+			}
+		}
+		if in.Action == DELETE {
+			val, err := tx.Delete(in.GetKey())
+			response.PreviousValue = val
+			if err != nil {
+				response.Error = err.Error()
+			}
+		}
+		return nil
+	})
+	return response, nil
 }
+
 
 func StartBuntServer(host string, port string, db *buntdb.DB) {
 
 	buntServer := BuntServer{}
 	buntServer.protobuntVersion = VERSION
+
 	buntServer.db = db
 	defer buntServer.db.Close()
 
 	link := host + ":" + port
 	listener, _ := net.Listen("tcp", link)
 	log.Println("Starting BuntDB Server...")
+
 	defer listener.Close()
 
-	for {
-		c, err := listener.Accept()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		go buntServer.handleConnection(c)
+	s := grpc.NewServer()
+	pb.RegisterProtoBuntServer(s, &server{buntServer: buntServer})
+	if err := s.Serve(listener); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
 }

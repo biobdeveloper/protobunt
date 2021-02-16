@@ -2,11 +2,11 @@
 
 ![Go](https://github.com/biobdeveloper/protobunt/workflows/Go/badge.svg)
 
-Server and client for BuntDB using simple text protocol over TCP. 
+Server and client for [BuntDB] using [gRPC] over binary [Protocol Buffers] on top of simple TCP. 
 
 [BuntDB] is awesome simple key/value storage written on Go. 
 It can be used locally, but there is not out-of-box way to use remote database connection.
-ProtoBunt trying to be a solution.
+ProtoBunt claims to be the solution.
 
 ## Install
 ```sh
@@ -24,7 +24,7 @@ import "github.com/biobdeveloper/protobunt"
 
 
 func main() {
-	// Firstly, open some database...
+	// First, open some database...
 	db, _ := buntdb.Open("dbname.db")
 	
 	// ...Then start the server
@@ -41,38 +41,33 @@ package main
 
 import "fmt"
 import "github.com/biobdeveloper/protobunt"
+import pb "protobunt/proto"
 
 
 func main()  {
 	
 	// When the client is created, it makes the first test connection 
 	// to negotiate the library version with the remote server
-	cli := CreateBuntClient("127.0.0.1", "8080")
+	cli, ctx, cancel := CreateBuntClient("127.0.0.1", "8080")
+	defer cancel()
 
 	// Create some record by pass key, value args
-	cli.Update(SET, "Alice", "Bob")
+	req1 := pb.UpdateRequest{Key: "Alice", Value: "Bob", Action: SET}
+	cli.Update(ctx, &req1)
 
-	// And look at this
-	get := cli.View(GET, "Alice")
-	fmt.Printf("Alice loves %s", get)
-         // Alice loves Bob
+	req2 := pb.ViewRequest{Key: "Alice", Action: GET}
+	initValue, _ := cli.View(ctx, &req2)
+	res2 := initValue.GetVal()
+
+	fmt.Printf("Alice loves %s", res2)
+	// Alice loves Bob
 }
 ```
 
 ## Warning
 ProtoBundDB is currenty alpha version!
 
-## Why not 3rd-side modern protocol like gRPC?
-Now I'm choosing a protocol to use in the future. I will be glad to receive advices and issues.
-
-## Protocol Specification
-Currently using simple text protocol
-* `\t `symbol as the request parts separator
-* `\n `symbol as the end of request string
-
-Client sending requests with text data 
-* `View\tGet\t{Alice}\n`
-* `Update\tSet\t{Alice:Bob}\n`
-* ...
 
 [BuntDB]: https://github.com/tidwall/buntdb
+[Protocol Buffers]: https://developers.google.com/protocol-buffers/
+[gRPC]: https://github.com/grpc/grpc
