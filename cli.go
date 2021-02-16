@@ -1,11 +1,14 @@
 package protobunt
 
 import (
-	"bufio"
-	"fmt"
+	"context"
 	"log"
 	"net"
 	"strings"
+	"time"
+
+	"google.golang.org/grpc"
+	pb "protobunt/proto"
 )
 
 const (
@@ -22,45 +25,25 @@ type BuntClient struct {
 }
 
 
-func (cli *BuntClient) call(action string, tx string, txData string) string {
-	rawRequestString := strings.Join([]string{action, tx, txData}, "\t") + "\n"
-	cli.conn.Write([]byte(rawRequestString))
-	message, _ := bufio.NewReader(cli.conn).ReadString('\n')
-	return strings.Trim(message, "\n")
-}
-
-func (cli *BuntClient) testConnection() {
-	testConn := cli.call("Test", cli.protobuntVersion, "")
-	if testConn != cli.protobuntVersion {
-		fmt.Printf("Warning! Different versions: client %s, server %s", cli.protobuntVersion, testConn)
+func CreateBuntClient(host string, port string) (pb.ProtoBuntClient, context.Context, context.CancelFunc) {
+	var link = strings.Join([]string{host, port}, ":")
+	conn, err := grpc.Dial(link, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
 	}
-}
+	client := pb.NewProtoBuntClient(conn)
 
-func (cli *BuntClient) View(tx string, key string) string {
-	if tx == "" {
-		tx = GET
+	clientDeadline := time.Now().Add(time.Duration(1) * time.Second)
+	ctx, cancel := context.WithDeadline(context.Background(), clientDeadline)
+
+	r, err := client.VersionCheck(ctx, &pb.TestRequest{ClientVersion: "0.0.2"})
+	if err != nil {
+		log.Fatalf("could not exec: %v", err)
 	}
-	return cli.call("View", tx, "{" + key + "}")
-}
 
-func (cli *BuntClient) Update(tx, key, value string) string {
-	if tx == "" {
-		tx = SET
+	if r.GetServerVersion() != VERSION {
+		log.Printf("Warning: different versions server and client: %s vs %s", r.GetServerVersion(), VERSION)
 	}
-	return cli.call("Update", tx,"{" + key + ":" + value + "}")
+
+	return client, ctx, cancel
 }
-
-func CreateBuntClient(host string, port string) *BuntClient {
-
-	client := new(BuntClient)
-	var link = host + ":" + port
-	client.conn, _ = net.Dial("tcp", link)
-
-	log.Println("BuntDB client is ready...")
-
-	client.protobuntVersion = VERSION
-	client.testConnection()
-
-	return client
-}
-
