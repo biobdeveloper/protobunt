@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package protobunt;
+
+import "google/protobuf/any.proto";
+
+// The greeting service definition.
+service ProtoBunt {
+  // Sends a greeting
+  rpc VersionCheck (TestRequest) returns (TestResponse) {}
+  rpc View (ViewRequest) returns (ViewResponse) {}
+  rpc Update (UpdateRequest) returns (UpdateResponse) {}
+}
+
+
+// The request message containing the user's name.
+message TestRequest {
+  string client_version = 1;
+}
+
+// The response message containing the greetings
+message TestResponse {
+  string server_version = 1;
+}
+
+message ViewRequest {
+  string key = 1;
+  string action = 2;
+}
+
+message ViewResponse {
+  string val = 1;
+  string error = 3;
+}
+
+message UpdateRequest {
+  string key = 1;
+  string value = 2;
+  string action = 3;
+}
+
+message UpdateResponse {
+  string previousValue = 1;
+  bool replaced = 2;
+  string error = 3;
+}
